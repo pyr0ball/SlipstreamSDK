@@ -1,0 +1,12 @@
+[submodule "Proteus"]
+	path = Proteus
+	url = https://github.com/BruceDLong/Proteus.git
+[submodule "CodeDog"]
+	path = CodeDog
+	url = https://github.com/BruceDLong/CodeDog.git
+[submodule "Slipstream"]
+	path = Slipstream
+	url = https://github.com/BruceDLong/Slipstream.git
+[submodule "PRbL-bashrc"]
+	path = PRbL-bashrc
+	url = https://github.com/Pyr0ball/PRbL-bashrc.git
