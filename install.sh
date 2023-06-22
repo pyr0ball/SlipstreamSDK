@@ -37,6 +37,7 @@ rundir_absolute=$(pushd $rundir ; pwd ; popd)
 escape_dir=$(printf %q "${rundir_absolute}")
 logfile="${rundir}/${pretty_date}_${scriptname}.log"
 
+
 #-----------------------------------------------------------------#
 # Script-specific Parameters
 #-----------------------------------------------------------------#
@@ -81,10 +82,9 @@ pip_packages=(
 )
 
 repo_packages=(
-    https://github.com/BruceDLong/CodeDog.git
-    https://github.com/BruceDLong/Proteus.git
-    https://github.com/BruceDLong/Slipstream.git
-    https://github.com/pyr0ball/PRbL-bashrc.git
+    BruceDLong/CodeDog
+    BruceDLong/Proteus
+    BruceDLong/Slipstream
 )
 
 prbl_packages=(
@@ -124,7 +124,9 @@ script-title(){
 
 # Function for displaying the usage of this script
 usage(){
+    script-title
     boxborder \
+        "${_script-title}" \
         "${lbl}Usage:${dfl}" \
         "${lyl}./$scriptname ${bld}[args]${dfl}" \
         "$(boxseparator)" \
@@ -155,20 +157,21 @@ detectvim(){
 check-deps(){
     # Iterate through the list of required packages and check if installed
     for pkg in ${sys_packages[@]} ; do
-        local _pkg=$(dpkg -l $pkg 2>&1 >/dev/null ; echo $?)
+        #local _pkg=$(dpkg -l $pkg 2>&1 >/dev/null ; echo $?)
+        
         # If not installed, add it to the list of missing bins
-        if [[ $_pkg != 0 ]] ; then
+        if ! check-packages $pkg ; then
             bins_missing+=($pkg)
         fi
     done
     pybin=$(which python3)
     if [ -z $pybin ] ; then
-        run install-packages python3 python3-pip
+        bins_missing+=(python3)
         # TODO: make a universal package install function
     fi
     pipbin=$(which pip3)
     if [ -z $pipbin ] ; then
-        run install-packages python3-pip
+        bins_missing+=(pip3)
     fi
     for pkg in ${pip_packages[@]} ; do
         pippkg_installed=$(pip list | grep -F $pkg ; echo $?)
@@ -187,42 +190,50 @@ check-deps(){
     local _bins_missing=${#bins_missing[@]}
     # If higher than 0, return a fail (1)
     if [[ $_bins_missing != 0 ]] ; then
-        return 1
+        return ${#_bins_missing}
     else
         return 0
     fi
 }
 
 install-deps(){
-    logger echo "Installing packages: $sys_packages"
+    logger echo "${grn}Installing packages:${lyl} $sys_packages${dfl}"
     for _package in ${sys_packages[@]} ; do
         run install-packages $_package
     done
     if [ -f ${rundir}/requirements.txt ] ; then
-        run pip install -y ${rundir}/requirements.txt
+        logger echo "${grn}Installing pip requirements$...${dfl}"
+        run pip install -U ${rundir}/requirements.txt
     else
         if [ ! -z $pip_packages ] ; then
-            run pip install ${pip_packages[@]}
+            logger echo "${grn}Installing pip packages:${lyl} $pip_packages${dfl}"
+            run pip install -U ${pip_packages[@]}
         fi
     fi
-    for _package in $prbl_packages ; do
-        if [ -f ${rundir}/$_package ] ; then
-            if [[ $dry_run != true ]] ; then
-                boxline "running extra $extra"
-                run "${rundir}/$_package -i"
+    logger echo "${grn}Checking Repositories:${lyl} $repo_packages${dfl}"
+    pushd $installdir
+        for repo in "${repo_packages[@]}"; do
+            if ! check-git-repository "repositories/${repo#*/}"; then
+                if [ -d "repositories/${repo#*/}" ] ; then
+                    warn "Existing repo ${repo#*/} is broken..."
+                    return 1
+                else
+                    logger echo "Cloning ${repo} into ${installdir}/repositories/${repo#*/}"
+                    clone-repo "https://github.com/$repo" "${installdir}/repositories/${repo#*/}"
+                fi
             else
-                dry_run=false
-                run "${rundir}/$_package -D"
-                dry_run=true
+                pushd "repositories/${repo#*/}"
+                if [[ ${VERSIONS[${repo#*/}]} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                    echo "Version tag detected: ${VERSIONS[${repo#*/}]}"
+                    git checkout "${VERSIONS[${repo#*/}]}"
+                else
+                    echo "Commit hash detected: ${VERSIONS[${repo#*/}]}"
+                    git checkout -q "${VERSIONS[${repo#*/}]}"
+                fi
+                popd
             fi
-        else
-            if [[ $dry_run != true ]] ; then
-                run-from-url https://raw.githubusercontent.com/pyr0ball/PRbL-bashrc/main/extras/$_package -i
-            else
-                run-from-url https://raw.githubusercontent.com/pyr0ball/PRbL-bashrc/main/extras/$_package -D
-            fi
-        fi
-    done
+        done
+    popd
     # Sets dependency installed flag to true
     depsinstalled=true
 }

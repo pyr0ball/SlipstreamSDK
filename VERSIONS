@@ -1,6 +1,5 @@
-CodeDog : 
-Proteus : 
-Slipstream : 
-    golang : 19.*.*
-PRbL-bashrc : 
-SDK : 0.0.1
+VERSIONS[CodeDog]=master
+VERSIONS[Proteus]=master
+VERSIONS[Slipstream]=master
+VERSIONS[golang]=19.9.0
+VERSIONS[SlipstreamSDK]=main
