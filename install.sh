@@ -5,8 +5,20 @@
 
 # initial vars
 VERSION=0.0.1
-_script-title="Slipstream Foundation SDK Installer - v$VERSION"
+script_title="Slipstream Foundation SDK Installer - v$VERSION"
 installdir="/opt/SlipstreamSDK"
+
+# Escape characters (if your shell uses a different one, you can modify it here)
+# By default this is using the usual bash escape code
+ESC=$( printf '\033')
+
+# Detect OS type
+case $OSTYPE in 
+  linux-gnu* ) ESC=$( printf '\033') ;;
+  darwin* ) ESC=$( printf '\e') ;;
+  cygwin ) ESC=$( printf '\033') ;;
+  msys ) ESC=$( printf '\033') ;;
+esac
 
 # Bash expansions to get the name and location of this script when run
 scriptname="${BASH_SOURCE[0]##*/}"
@@ -113,26 +125,37 @@ fi
 #-----------------------------------------------------------------#
 # Script-specific Funcitons
 #-----------------------------------------------------------------#
+# SlipStream Colors
+    ss1="${ESC}[38;5;87m"
+    ss2="${ESC}[38;5;51m"
+    ss3="${ESC}[38;5;45m"
+    ss4="${ESC}[38;5;39m"
+    ss5="${ESC}[38;5;33m"
+    ss6="${ESC}[38;5;26m"
+    ss7="${ESC}[38;5;252m"
+    ss8="${ESC}[38;5;248m"
+    ss9="${ESC}[38;5;244m"
+    ss10="${ESC}[38;5;240m"
 
 script-title(){
     boxborder \
-"           ___          _    _                                        " \
-"          |       |         | |           |                           " \
-"           -+-    +     +   |-       -   -+-  |-     -     -    |- -  " \
-"              |   |     |   |        \    |   |     |/    | |   | | | " \
-"           ---    -                  -     -         --    --         " \
-"                                ___   ___                             " \
-"                               |       | | |  /                       " \
-"                                -+-    + | |-+                        " \
-"                                   |   | | |  \                       " \
-"                                ---   ---                             "
+"${ss1}           ___          _    _                                        " \
+"${ss2}          |       |         | |           |                           " \
+"${ss3}           -+-    +     +   |-       -   -+-  |-     -     -    |- -  " \
+"${ss4}              |   |     |   |        \    |   |     |/    | |   | | | " \
+"${ss5}           ---    -                  -     -         --    --         " \
+"${ss6}                                ___   ___                             " \
+"${ss7}                               |       | | |  /                       " \
+"${ss8}                                -+-    + | |-+                        " \
+"${ss9}                                   |   | | |  \                       " \
+"${ss10}                                ---   ---                             "
 }
 
 # Function for displaying the usage of this script
 usage(){
     script-title
     boxborder \
-        "${_script-title}" \
+        "${script_title}" \
         "${lbl}Usage:${dfl}" \
         "${lyl}./$scriptname ${bld}[args]${dfl}" \
         "$(boxseparator)" \
@@ -479,98 +502,97 @@ dry-run-report(){
 #------------------------------------------------------#
 # Options and Arguments Parser
 #------------------------------------------------------#
-script-title
 
 #$ Options Parser
 diags(){
-  boxborder \
-    "Diagnostics:" \
-    "Local IP: $local_ip" \
-    "Cert File: $cert_file" \
-    "Key File: $key_file" \
-    "Target(s): $target"
+    script-title
+    boxborder \
+        "Diagnostics:" \
+        "Local IP: $local_ip" \
+        "Cert File: $cert_file" \
+        "Key File: $key_file" \
+        "Target(s): $target"
 }
 
 while [[ $# -gt 0 ]] ; do
-  key="$1"
-  case $key in
-    -c | --cert-file)
-        if [[ -n $2 && ! $2 == -* ]]; then
-            cert_file=$2
-            shift
-        else
-            warn "Invalid argument for $key: $2"
+    key="$1"
+    case $key in
+        -c | --cert-file)
+            if [[ -n $2 && ! $2 == -* ]]; then
+                cert_file=$2
+                shift
+            else
+                warn "Invalid argument for $key: $2"
+                usage
+                exit 1
+            fi
+            ;;
+        -k | --key-file)
+            if [[ -n $2 && ! $2 == -* ]]; then
+                key_file=$2
+                shift
+            else
+                warn "Invalid argument for $key: $2"
+                usage
+                exit 1
+            fi
+            ;;
+        -t | --target)
+            if [[ -n $2 && ! $2 == -* ]]; then
+                target=$2
+                shift
+            else
+                warn "Invalid argument for $key: $2"
+                usage
+                exit 1
+            fi
+            ;;
+        -D | --dry-run)
+            export dry_run=true
+            install
+            box-double
+            dry-run-report
+            usage
+            unset dry_run
+            box-norm
+            success "$script_title Dry-Run Complete!"
+            ;;
+        -u | --update)
+            export update_run=true
+            diags
+            update && unset update_run && success " Certificate $cert_file and Key $key_file ${lyl}Updated${dfl}]"
+            ;;
+        -i | --install)
+            diags
+            install && success " Certificate $cert_file and Key $key_file ${lyl}Installed${dfl}]"
+            ;;
+        -F | --force-remove)
+            remove-arbitrary && success " $script_title ${lyl}Force-Removed${dfl}]"
+            ;;
+        -h | --help)
+            usage
+            ;;
+        -*)
+            warn "Invalid option: $key"
             usage
             exit 1
-        fi
-        ;;
-    -k | --key-file)
-        if [[ -n $2 && ! $2 == -* ]]; then
-            key_file=$2
-            shift
-        else
-            warn "Invalid argument for $key: $2"
-            usage
-            exit 1
-        fi
-        ;;
-    -t | --target)
-        if [[ -n $2 && ! $2 == -* ]]; then
-            target=$2
-            shift
-        else
-            warn "Invalid argument for $key: $2"
-            usage
-            exit 1
-        fi
-        ;;
-    -D | --dry-run)
-        export dry_run=true
-        box-double
-        boxtop
-        diags
-        install-keys
-        boxbottom
-        dry-run-report
-        usage
-        unset dry_run
-        success "$script_title Dry-Run Complete!"
-        ;;
-    -u | --update)
-        export update_run=true
-        diags
-        update && unset update_run && success " Certificate $cert_file and Key $key_file ${lyl}Updated${dfl}]"
-        ;;
-    -i | --install)
-        diags
-        install-keys && success " Certificate $cert_file and Key $key_file ${lyl}Installed${dfl}]"
-        ;;
-    -F | --force-remove)
-        remove-arbitrary && success " $script_title ${lyl}Force-Removed${dfl}]"
-        ;;
-    -h | --help)
-        usage
-        ;;
-    -*)
-        warn "Invalid option: $key"
-        usage
-        exit 1
-        ;;
-    *)
-        if [[ -f $key ]]; then
-          # handle filename passed with flag
-          process_file $key
-        else
-          warn "Invalid argument: $key"
-          usage
-          exit 1
-        fi
-        ;;
-  esac
-  shift
+            ;;
+        *)
+            if [[ -f $key ]]; then
+                # handle filename passed with flag
+                process_file $key
+            else
+                warn "Invalid argument: $key"
+                usage
+                exit 1
+            fi
+            ;;
+    esac
+    shift
 done
 
 #------------------------------------------------------#
 # Script begins here
 #------------------------------------------------------#
 
+usage
