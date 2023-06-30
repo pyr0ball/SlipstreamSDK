@@ -6,6 +6,7 @@
 # initial vars
 VERSION=0.0.1
 _script-title="Slipstream Foundation SDK Installer - v$VERSION"
+installdir="/opt/SlipstreamSDK"
 
 # Bash expansions to get the name and location of this script when run
 scriptname="${BASH_SOURCE[0]##*/}"
@@ -49,6 +50,7 @@ installer_functionsrev=$functionsrev
 runuser=$(whoami)
 
 # set up an array containing the users listed under /home/
+users=()
 users=($(ls /home/))
 
 # If run as non-root, default install to user's home directory
@@ -64,6 +66,7 @@ installed_files=()
 installed_dirs=()
 
 # List of dependency packaged to be istalled via apt (For Debian/Ubuntu)
+packages=()
 packages=(
     git
     curl
@@ -76,17 +79,20 @@ packages=(
     wget
 )
 
+pip_packages=()
 pip_packages=(
     pyparsing
     gitpython
 )
 
+repo_packages=()
 repo_packages=(
     BruceDLong/CodeDog
     BruceDLong/Proteus
     BruceDLong/Slipstream
 )
 
+prbl_packages=()
 prbl_packages=(
     golang.19.x.install
 )
@@ -138,10 +144,7 @@ usage(){
         "   -f [--force]" \
         "   -F [--force-remove]" \
         "   -u [--update]" \
-        "   -h [--help]" \
-        "" \
-        "Running this installer as 'root' will install globally to $globalinstalldir" \
-        "You must run as 'root' for this script to automatically resolve dependencies"
+        "   -h [--help]" 
 }
 
 detectvim(){
@@ -239,18 +242,6 @@ install-deps(){
     depsinstalled=true
 }
 
-install(){
-    # If script is run as root, run global install
-    if [[ $runuser == root ]] ; then
-        installdir="${globalinstalldir}"
-        globalinstall
-    else
-    # If user is non-root, run user-level install
-        installdir="${userinstalldir}"
-        userinstall
-    fi
-}
-
 install-functions(){
     # Copy functions
     if [ -f ${rundir}/PRbL/functions ] ; then
@@ -296,7 +287,7 @@ install-prbl(){
 
 extras-menu(){
     # Download and install any other extras
-    #if [ -d "${rundir_absolute}/extras/" ] ; then
+    if [ -d "${rundir_absolute}/extras/" ] ; then
         boxborder "Extra installs available. Select and install?"
         extras_menu=(
         "$(boxline "${green_check} Yes")"
@@ -308,104 +299,10 @@ extras-menu(){
                 ;;
             1)  boxline "Skipping extras installs" ;;
         esac
-    #fi
-}
-
-userinstall(){
-# TODO: modify this function to accept a user as an argument and call it from globalinstall
-    s3dk_bashrc="# SlipStream SDK environment v$VERSION 
-export s3dk_functions=\"${installdir}/functions\""
-    # Create install directory under user's home directory
-    run mkdir -p ${installdir}
-
-    # Copy functions first
-    install-functions
-
-    # Copy bashrc scripts to home folder
-    install-dir ${rundir}/lib/skel/ $HOME
-
-    # Check for dependent applications and warn user if any are missing
-    if ! check-deps ; then
-        warn "Some of the utilities needed by this script are missing"
-        boxlinelog "Missing utilities:"
-        boxlinelog "${bins_missing[@]}"
-        boxlinelog "Would you like to install them? (this will require root password)"
-        utilsmissing_menu=(
-        "$(boxline "${green_check} Yes")"
-        "$(boxline "${red_x} No")"
-        )
-        case `select_opt "${utilsmissing_menu[@]}"` in
-            0)  boxlinelog "${grn}Installing dependencies...${dfl}"
-                install-deps
-                ;;
-            1)  warn "Dependent Utilities missing: $bins_missing" ;;
-        esac
-    fi
-
-    # Check for and parse the installed vim version
-    detectvim
-
-    # If vim is installed, add config files for colorization and expandtab
-    # if [[ $viminstall != null ]] ; then
-    #     run mkdir -p ${HOME}/.vim/colors
-    #     install-file $rundir/lib/vimfiles/crystallite.vim ${HOME}/.vim/colors
-    #     take-backup $HOME/.vimrc
-    #     cp $rundir/lib/vimfiles/vimrc.local $rundir/lib/vimfiles/.vimrc
-    #     install-file $rundir/lib/vimfiles/.vimrc $HOME
-    #     rm $rundir/lib/vimfiles/.vimrc
-    # fi
-
-    # Check for existing bashrc config, append if missing
-    if [[ $(cat ${HOME}/.bashrc | grep -c 'bashrc.d') == 0 ]] ; then
-        take-backup $HOME/.bashrc
-        run echo -e "$bashrc_append" >> $HOME/.bashrc && boxborder "bashc.d installed..." || warn "Malformed append on ${lbl}${HOME}/.bashrc${dfl}. Check this file for errors"
-        run echo -e "$s3dk_bashrc" >> $HOME/.bashrc.d/70-SlipStreamSDK.bashrc && boxborder "bashc.d/70-SlipStreamSDK.bashrc installed..." || warn "Malformed append on ${lbl}${HOME}/.bashrc.d/70-SlipStreamSDK.bashrc${dfl}. Check this file for errors"
-    fi
-
-
-    # Create the quickinfo cache directory
-    #mkdir -p $HOME/.quickinfo
-    # export prbl_functions="${installdir}/functions"
-
-    # If all required dependencies are installed, launch initial cache creation
-    #if [[ "$bins_missing" == "false" ]] ; then
-    #    bash $HOME/.bashrc.d/11-quickinfo.bashrc
-    #fi
-    #clear
-
-    # launch extra installs
-    extras-menu
-
-    if [[ $dry_run != true ]] ; then
-        boxborder "${grn}Please be sure to run ${lyl}sensors-detect --auto${grn} after installation completes${dfl}"
     fi
 }
 
-globalinstall(){
-    # Create global install directory
-    run mkdir -p ${installdir}
-
-    install-functions
-    export prbl_functions="${globalinstalldir}/functions"
-
-    # Check for dependent applications and offer to install
-    if ! check-deps ; then
-        warn "Some of the utilities needed by this script are missing"
-        boxlinelog "Missing utilities:"
-        boxlinelog "${bins_missing[@]}"
-        boxlinelog "Would you like to install them? (this will require root password)"
-        utilsmissing_menu=(
-        "$(boxline "${green_check} Yes")"
-        "$(boxline "${red_x} No")"
-        )
-        case `select_opt "${utilsmissing_menu[@]}"` in
-            0)  boxlinelog "${grn}Installing dependencies...${dfl}"
-                install-deps
-                ;;
-            1)  warn "Dependent Utilities missing: $bins_missing" ;;
-        esac
-    fi
-
+choose-users-menu(){
     # Prompt the user to specify which users to install the quickinfo script for
     boxborder "Which users should PRbL be installed for?"
     multiselect result users "false"
@@ -427,20 +324,90 @@ globalinstall(){
             run sudo chown -R ${selecteduser}:${selecteduser} ${installdir}
             if [[ "$bins_missing" == "false" ]] ; then
                 boxborder "Checking ${selecteduser}'s bashrc..."
-                run su ${selecteduser} -c /home/${selecteduser}.bashrc.d/11-quickinfo.bashrc
+                run su ${selecteduser} -c /home/${selecteduser}.bashrc.d/70-SlipStreamSDK.bashrc
             fi
         fi
     done
+}
 
+userinstall(){
+    target_user=$1
+# TODO: modify this function to accept a user as an argument and call it from globalinstall
+    s3dk_bashrc="# SlipStream SDK environment v$VERSION 
+export s3dk_functions=\"${installdir}/functions\""
+
+    # Copy functions first
+    install-functions
+
+    # Copy bashrc scripts to home folder
+    install-dir ${rundir}/repositories ${installdir}
+
+    # Check for dependent applications and warn user if any are missing
+    if ! check-deps ; then
+        warn "Some of the utilities needed by this script are missing"
+        boxline "Missing utilities:"
+        boxline "${bins_missing[@]}"
+        boxline "Would you like to install them? (this will require root password)"
+        utilsmissing_menu=(
+        "$(boxline "${green_check} Yes")"
+        "$(boxline "${red_x} No")"
+        )
+        case `select_opt "${utilsmissing_menu[@]}"` in
+            0)  boxline "${grn}Installing dependencies...${dfl}"
+                install-deps
+                ;;
+            1)  warn "Dependent Utilities missing: $bins_missing" ;;
+        esac
+    fi
+
+    # Check for and parse the installed vim version
     detectvim
-    if [[ $viminstall != null ]] ; then
-        install-file $rundir/lib/vimfiles/crystallite.vim /usr/share/vim/${viminstall}/colors
-        take-backup /etc/vim/vimrc.local
-        install-file $rundir/lib/vimfiles/vimrc.local /etc/vim/vimrc.local
+
+    # Check for existing bashrc config, append if missing
+
+    if [[ $(cat /home/${target_user}/.bashrc | grep -c 'bashrc.d') == 0 ]] ; then
+        take-backup /home/${target_user}.bashrc
+        run echo -e "$bashrc_append" >> /home/${target_user}/.bashrc && boxborder "bashc.d installed..." || warn "Malformed append on ${lbl}/home/${target_user}/.bashrc${dfl}. Check this file for errors"
     fi
-    if [ ! -z $(which sensors-detect) ] ; then
-        run sensors-detect --auto
+    if [ ! -f /home/${target_user}/.bashrc.d/70-SlipStreamSDK.bashrc ] ; then
+        run echo -e "$s3dk_bashrc" >> /home/${target_user}/.bashrc.d/70-SlipStreamSDK.bashrc && boxborder "bashc.d/70-SlipStreamSDK.bashrc installed..." || warn "Malformed append on ${lbl}/home/${target_user}/.bashrc.d/70-SlipStreamSDK.bashrc${dfl}. Check this file for errors"
     fi
+}
+
+install(){
+    # Create global install directory
+    run mkdir -p ${installdir}
+
+    install-functions
+    export prbl_functions="${installdir}/functions"
+
+    # Check for dependent applications and offer to install
+    if ! check-deps ; then
+        warn "Some of the utilities needed by this script are missing"
+        boxline "Missing utilities:"
+        boxline "${bins_missing[@]}"
+        boxline "Would you like to install them? (this will require root password)"
+        utilsmissing_menu=(
+        "$(boxline "${green_check} Yes")"
+        "$(boxline "${red_x} No")"
+        )
+        case `select_opt "${utilsmissing_menu[@]}"` in
+            0)  boxline "${grn}Installing dependencies...${dfl}"
+                install-deps
+                ;;
+            1)  warn "Dependent Utilities missing: $bins_missing" ;;
+        esac
+    fi
+
+    boxline "Install for other users?"
+    utilsmissing_menu=(
+    "$(boxline "${green_check} Yes")"
+    "$(boxline "${red_x} No")"
+    )
+    case `select_opt "${utilsmissing_menu[@]}"` in
+        0)  choose-users-menu ;;
+        1)  userinstall $runuser ;;
+    esac
 
     # Download and install any other extras
     extras-menu
@@ -477,8 +444,7 @@ remove(){
 
 remove-arbitrary(){
     update_run=true
-    userinstall
-    globalinstall
+    install
     update_run=
     #backup_files=()
     remove
