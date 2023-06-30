@@ -55,7 +55,7 @@ users=($(ls /home/))
 userinstalldir="$HOME/.local/share/SlipstreamSDK"
 
 # If run as root, this will be the install directory
-globalinstalldir="/usr/share/SlipstreamSDK"
+globalinstalldir="/opt/SlipstreamSDK"
 
 # Initialize arrays for file and dependency management
 bins_missing=()
@@ -172,13 +172,14 @@ check-deps(){
     pipbin=$(which pip3)
     if [ -z $pipbin ] ; then
         bins_missing+=(pip3)
+    else
+        for pkg in ${pip_packages[@]} ; do
+            pippkg_installed=$(pip list | grep -F $pkg ; echo $?)
+            if [[ $pippkg_installed != 0 ]] ; then
+                bins_missing+=("pip: $pkg")
+            fi
+        done
     fi
-    for pkg in ${pip_packages[@]} ; do
-        pippkg_installed=$(pip list | grep -F $pkg ; echo $?)
-        if [[ $pippkg_installed != 0 ]] ; then
-            bins_missing+=("pip: $pkg")
-        fi
-    done
 
     # This installer requires golang to work
     # TODO: better handling of prbl_packages as dependencies
