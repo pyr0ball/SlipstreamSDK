@@ -136,16 +136,16 @@ fi
 # Script-specific Funcitons
 #-----------------------------------------------------------------#
 # SlipStream Colors
-    ss1="${ESC}[38;5;87m"
-    ss2="${ESC}[38;5;51m"
-    ss3="${ESC}[38;5;45m"
-    ss4="${ESC}[38;5;39m"
-    ss5="${ESC}[38;5;33m"
-    ss6="${ESC}[38;5;254m"
-    ss7="${ESC}[38;5;252m"
-    ss8="${ESC}[38;5;248m"
-    ss9="${ESC}[38;5;244m"
-    ss10="${ESC}[38;5;240m"
+ss1="${ESC}[38;5;87m"
+ss2="${ESC}[38;5;51m"
+ss3="${ESC}[38;5;45m"
+ss4="${ESC}[38;5;39m"
+ss5="${ESC}[38;5;33m"
+ss6="${ESC}[38;5;254m"
+ss7="${ESC}[38;5;252m"
+ss8="${ESC}[38;5;248m"
+ss9="${ESC}[38;5;244m"
+ss10="${ESC}[38;5;240m"
 
 script-title(){
     boxborder \
@@ -184,6 +184,7 @@ detectvim(){
     # If the vim install directory exists, check for and store the highest numerical value version installed
     if [[ -d /usr/share/vim ]] ; then
         viminstall=$(ls -lah /usr/share/vim/ | grep vim | grep -v rc | awk '{print $NF}' | tail -n 1)
+        logger boxline "Vim detected at $viminstall"
     else
         viminstall=null
         warn "vim is not currently installed, unable to set up colorscheme and formatting"
@@ -195,18 +196,35 @@ check-deps(){
     for pkg in "${sys_packages[@]}" ; do
         pkg_installed=$(check-packages $pkg)
         if ! $pkg_installed ; then
+            case $pkg_installed in
+                1) logger boxline "Installed version of $pkg is out of date" ;;
+                2) logger boxline "Package $pkg is not installed" ;;
+                3) logger boxline "Installed version of $pkg is newer than available" ;;
+            esac
             bins_missing+=($pkg)
         fi
     done
     if ! command -v python3 >/dev/null 2>&1 ; then
+        brdr=${ong}
+        logger boxline "Python3 is not currently installed or is not available on \$PATH"
+        logger boxline "Adding python3 package to deps list"
+        brdr=${dfl}
         bins_missing+=(python3)
     fi
 
     if ! command -v pip3 >/dev/null 2>&1 ; then
+        brdr=${ong}
+        logger boxline "Pip is not currently installed or is not available on \$PATH"
+        logger boxline "Adding pip3 package to deps list"
+        brdr=${dfl}
         bins_missing+=(pip3)
     else
         for pkg in "${pip_packages[@]}" ; do
             if ! pip show "$pkg" >/dev/null 2>&1 ; then
+                brdr=${ong}
+                logger boxline "Required pip package $pkg is not currently installed"
+                logger boxline "Adding package $pkg to pip deps list"
+                brdr=${dfl}
                 bins_missing+=("pip: $pkg")
             fi
         done
@@ -215,16 +233,22 @@ check-deps(){
     # This installer requires golang to work
     # TODO: better handling of prbl_packages as dependencies
     if ! command -v go >/dev/null 2>&1 ; then
+        brdr=${ong}
+        logger boxline "golang v19.x is required for Slipstream and is not currently installed"
+        logger boxline "Adding golang to deps list"
+        brdr=${dfl}
         bins_missing+=("prbl: golang.install")
     fi
     # Count the number of entries in bins_missing
     local _bins_missing=${#bins_missing[@]}
     # If higher than 0, return a fail (1)
     if [[ $_bins_missing != 0 ]] ; then
-        return ${#_bins_missing}
-    else
-        return 0
+        logger boxline "Dependencies missing >: $_bins_missing"
+        for pkg in ${bins_missing[@]} ; do
+            logger boxline "        >: $pkg"
+        done
     fi
+    return ${_bins_missing}
 }
 
 install-deps(){
@@ -232,7 +256,9 @@ install-deps(){
     for _package in "${sys_packages[@]}" ; do
         install_result=$(run install-packages "$_package")
         if [[ $install_result != 0 ]] ; then
-            warn "Package install for $_package failed"
+            brdr=${ylw}
+            logger boxline "Package install for $_package failed"
+            brdr=${dfl}
         fi
     done
     if [ -f "${rundir}/requirements.txt" ] ; then
@@ -244,7 +270,7 @@ install-deps(){
             run pip install -U "${pip_packages[*]}"
         fi
     fi
-    logger echo "${grn}Checking Repositories:${lyl} $repo_packages${dfl}"
+    logger boxline "${grn}Checking Repositories:${lyl} $repo_packages${dfl}"
     pushd "$installdir"
         for repo in "${repo_packages[@]}"; do
             if ! check-git-repository "repositories/${repo#*/}"; then
@@ -252,16 +278,16 @@ install-deps(){
                     warn "Existing repo ${repo#*/} is broken..."
                     return 1
                 else
-                    logger echo "Cloning ${repo} into ${installdir}/repositories/${repo#*/}"
+                    logger boxline "Cloning ${repo} into ${installdir}/repositories/${repo#*/}"
                     clone-repo "https://github.com/$repo" "${installdir}/repositories/${repo#*/}"
                 fi
             else
                 pushd "repositories/${repo#*/}"
                 if [[ ${VERSIONS[${repo#*/}]} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                    echo "Version tag detected: ${VERSIONS[${repo#*/}]}"
+                    logger boxline "Version tag detected: ${VERSIONS[${repo#*/}]}"
                     git checkout "${VERSIONS[${repo#*/}]}"
                 else
-                    echo "Commit hash detected: ${VERSIONS[${repo#*/}]}"
+                    logger boxline "Commit hash detected: ${VERSIONS[${repo#*/}]}"
                     git checkout -q "${VERSIONS[${repo#*/}]}"
                 fi
                 popd
@@ -291,9 +317,11 @@ install-functions(){
     # Copy functions
     if [ -f ${rundir}/PRbL/functions ] ; then
         install-file ${rundir}/PRbL/functions ${installdir}
+        logger boxline "Installed PRbL functions from script source"
     else
         curl -ks 'https://raw.githubusercontent.com/pyr0ball/PRbL/main/functions' > ${rundir}/functions
         install-file ${rundir}/functions ${installdir}
+        logger boxline "Installed latest 'main' branch PRbL functions from GitHub"
     fi  
 }
 
@@ -307,7 +335,7 @@ install-prbl(){
 
     boxborder "Which extras should be installed?"
     for each in {1..${#_extras[@]}} ; do
-        preselect+=("false")
+        preselect+=("true")
     done
     multiselect result _extras preselect
 
