@@ -358,19 +358,7 @@ choose-users-menu(){
         # If the selected user is set to true
         if [[ "${result[idx]}" == "true" ]] ; then
             #cp -r ${rundir}/lib/skel/* /etc/skel/
-            install-dir ${rundir}/lib/skel/ /home/${selecteduser}/
-            # for file in $(ls -a -I . -I .. ${rundir}/lib/skel/) ; do
-            #     install-dir ${rundir}/lib/skel/$file $HOME
-            # done
-            if [[ $(cat /home/${selecteduser}/.bashrc | grep -c prbl) == 0 ]] ; then
-                take-backup /home/${selecteduser}/.bashrc
-                run echo -e "$bashrc_append" >> /home/${selecteduser}/.bashrc && boxborder "bashc.d installed..." || warn "Malformed append on ${lbl}/home/${selecteduser}/.bashrc${dfl}. Check this file for errors"
-            fi
-            run sudo chown -R ${selecteduser}:${selecteduser} ${installdir}
-            if [[ "$bins_missing" == "false" ]] ; then
-                boxborder "Checking ${selecteduser}'s bashrc..."
-                run su ${selecteduser} -c /home/${selecteduser}.bashrc.d/70-SlipStreamSDK.bashrc
-            fi
+            userinstall ${selecteduser}
         fi
     done
 }
@@ -411,12 +399,29 @@ export s3dk_functions=\"${installdir}/functions\""
     # Check for existing bashrc config, append if missing
 
     if [[ $(cat /home/${target_user}/.bashrc | grep -c 'bashrc.d') == 0 ]] ; then
-        take-backup /home/${target_user}.bashrc
-        run echo -e "$bashrc_append" >> /home/${target_user}/.bashrc && boxborder "bashc.d installed..." || warn "Malformed append on ${lbl}/home/${target_user}/.bashrc${dfl}. Check this file for errors"
+        take-backup /home/${target_user}/.bashrc
+        bashrc_appended=$(run "echo -e "$bashrc_append" >> "/home/${target_user}/.bashrc"")
+        if $bashrc_appended ; then
+            boxborder "bashc.d installed..."
+        else
+            warn "Malformed append on ${lbl}/home/${target_user}/.bashrc${dfl}. Check this file for errors"
+        fi
     fi
-    if [ ! -f /home/${target_user}/.bashrc.d/70-SlipStreamSDK.bashrc ] ; then
-        run echo -e "$s3dk_bashrc" >> /home/${target_user}/.bashrc.d/70-SlipStreamSDK.bashrc && boxborder "bashc.d/70-SlipStreamSDK.bashrc installed..." || warn "Malformed append on ${lbl}/home/${target_user}/.bashrc.d/70-SlipStreamSDK.bashrc${dfl}. Check this file for errors"
+    if [[ ! -f "/home/${target_user}/.bashrc.d/70-SlipStreamSDK.bashrc" ]] ; then
+        bashrc_created=$(run echo -e "$s3dk_bashrc" >> /home/${target_user}/.bashrc.d/70-SlipStreamSDK.bashrc)
+        if $bashrc_created ; then
+            boxborder "bashc.d/70-SlipStreamSDK.bashrc installed..." 
+        else
+            warn "Malformed append on ${lbl}/home/${target_user}/.bashrc.d/70-SlipStreamSDK.bashrc${dfl}. Check this file for errors"
+        fi
     fi
+
+    pushd $installdir/repositories/Proteus
+        run sudo python3 ruleMgr.py
+    popd
+    pushd $installdir/repositories/Slipstream
+        run $installdir/repositories/CodeDog/codeDog ./Slipstream.dog && logger echo "Slipstream app built at ${installdir}/repositories/Slipstream/LinuxBuild"
+    popd
 }
 
 install(){
@@ -445,11 +450,11 @@ install(){
     fi
 
     boxline "Install for other users?"
-    utilsmissing_menu=(
+    userchoose_menu=(
     "$(boxline "${green_check} Yes")"
     "$(boxline "${red_x} No")"
     )
-    case `select_opt "${utilsmissing_menu[@]}"` in
+    case `select_opt "${userchoose_menu[@]}"` in
         0)  choose-users-menu ;;
         1)  userinstall $runuser ;;
     esac
